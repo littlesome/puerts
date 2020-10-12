@@ -573,13 +573,23 @@ namespace Puerts.Editor
             return getMethod == null ? setMethod.IsStatic : getMethod.IsStatic;
         }
 
+        static MethodInfo[] GetMethodsWithOverloads(Type type, HashSet<Type> genTypeSet)
+        {
+            var declMethods = type.GetMethods(Flags);
+            var declMethodNames = declMethods.Select(m => m.Name).Distinct();
+
+            return type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                .Where(m => m.DeclaringType != type && genTypeSet.Contains(m.DeclaringType) && declMethodNames.Contains(m.Name))
+                .Concat(declMethods).ToArray();
+        }
+
         public static TsTypeGenInfo ToTsTypeGenInfo(Type type, HashSet<Type> genTypeSet)
         {
             var result = new TsTypeGenInfo()
             {
                 Name = type.Name.Replace('`', '$'),
                 Methods = genTypeSet.Contains(type) ? (type.IsAbstract ? new MethodBase[] { } : type.GetConstructors(Flags).Where(m => !isFiltered(m)).Cast<MethodBase>())
-                    .Concat(type.GetMethods(Flags)
+                    .Concat(GetMethodsWithOverloads(type, genTypeSet)
                         .Where(m => !isFiltered(m) && !IsGetterOrSetter(m) && (type.IsGenericTypeDefinition && !m.IsGenericMethodDefinition || Puerts.Utils.IsSupportedMethod(m)))
                         .Cast<MethodBase>())
                     .Select(m => ToTsMethodGenInfo(m, type.IsGenericTypeDefinition)).ToArray() : new TsMethodGenInfo[] { },
